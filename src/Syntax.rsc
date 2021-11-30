@@ -8,7 +8,7 @@ extend lang::std::Id;
  */
 
 start syntax Form 
-  = "form" Id "{" Question* "}"; 
+  = @Foldable "form" Id "{" Question* "}"; 
 
 // TODO: question, computed question, block, if-then-else, if-then
 syntax Question
