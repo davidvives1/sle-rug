@@ -15,8 +15,8 @@ data AQuestion(loc src = |tmp:///|)
   = normal(str label, AId id, AType questionType)
   | computed(str label, AId id, AType questionType, AExpr expr)
   | block(list[AQuestion] questions)
-  | if_then(AExpr condition, list[AQuestion] ifTrue)
-  | if_then_else(AExpr condition, list[AQuestion] ifTrue, list[AQuestion] ifFalse)
+  | if_then(AExpr condition, list[AQuestion] ifQs)
+  | if_then_else(AExpr condition, list[AQuestion] ifQs, list[AQuestion] elseQs)
   ;
 
 data AExpr(loc src = |tmp:///|)

@@ -49,9 +49,11 @@ set[Message] check(AForm f, TEnv tenv, UseDef useDef) {
  	 return msgs;
 }
 
+// Checks:
 // - produce an error if there are declared questions with the same name but different types.
 // - duplicate labels should trigger a warning 
 // - the declared type computed questions should match the type of the expression.
+// - produce an error if the condition is not boolean.
 set[Message] check(AQuestion q, TEnv tenv, UseDef useDef) {
   set[Message] msgs = {};
   
@@ -60,7 +62,7 @@ set[Message] check(AQuestion q, TEnv tenv, UseDef useDef) {
       if( <src1, _, label, _> <- tenv && <src2, _, label, _> <- tenv && src1 != src2)
       	msgs += { warning("Same label for different questions", u) };
       	
-      if( <_, id, label1, _> <- tenv && <_, id, label2, _> <- tenv && label1 != label2)
+      if( <src, _, label1, _> <- tenv && <src, _, label2, _> <- tenv && label1 != label2)
       	msgs += { warning("Different label for occurrencies of the same question", u) }; 	
      }
     
@@ -68,7 +70,7 @@ set[Message] check(AQuestion q, TEnv tenv, UseDef useDef) {
       if( <src1, _, label, _> <- tenv && <src2, _, label, _> <- tenv && src1 != src2)
       	msgs += { warning("Same label for different questions", u) };
       	
-      if( <_, id, label1, _> <- tenv && <_, id, label2, _> <- tenv && label1 != label2)
+      if( <src, _, label1, _> <- tenv && <src, _, label2, _> <- tenv && label1 != label2)
       	msgs += { warning("Different label for occurrencies of the same question", u) };
       
       msgs += check(expr, tenv, useDef);
@@ -79,17 +81,17 @@ set[Message] check(AQuestion q, TEnv tenv, UseDef useDef) {
     case block(list[AQuestion] questions, src = loc u):
       for (AQuestion q <- questions) msgs += check(q, tenv, useDef);
     
-    case if_then_else(AExpr cond, AQuestion ifqs, AQuestion elseqs, src = loc u): {
+    case if_then_else(AExpr cond, list[AQuestion] ifQs, list[AQuestion] elseQs, src = loc u): {
       msgs += { error("Condition is not boolean", u) | typeOf(cond, tenv, useDef) != tbool() };
       msgs += check(cond, tenv, useDef);
-      for (AQuestion q <- ifqs)   msgs += check(q, tenv, useDef);
-      for (AQuestion q <- elseqs) msgs += check(q, tenv, useDef);
+      for (AQuestion q <- ifQs)   msgs += check(q, tenv, useDef);
+      for (AQuestion q <- elseQs) msgs += check(q, tenv, useDef); 
     }
     
-    case if_then(AExpr cond, AQuestion ifqs, src = loc u): {
+    case if_then(AExpr cond, list[AQuestion] ifQs, src = loc u): {
       msgs += { error("Condition is not boolean", u) | typeOf(cond, tenv, useDef) != tbool() };
       msgs += check(cond, tenv, useDef);
-      for (AQuestion q <- ifqs) msgs += check(q, tenv, useDef);
+      for (AQuestion q <- ifQs) msgs += check(q, tenv, useDef);
     }
   }
   
@@ -97,116 +99,52 @@ set[Message] check(AQuestion q, TEnv tenv, UseDef useDef) {
 }
 
 
-
-
-
-
-
-
-
-
-
+// Checks:
+// - Reference to undefined questions
+// - Operands of invalid type to operators
+set[Message] check(ref(AId x), TEnv tenv, UseDef useDef)
+  = { error("Reference to undefined question", x.src) | useDef[x.src] == {} };
+default set[Message] check(AExpr e, TEnv tenv, UseDef useDef)
+  = { error("Operands of invalid type to operators", e.src) | typeOf(e, tenv, useDef) == tunknown() };
 
 
 // Check operand compatibility with operators.
-// E.g. for an addition node add(lhs, rhs), 
-//   the requirement is that typeOf(lhs) == typeOf(rhs) == tint()
-set[Message] check(AExpr e, TEnv tenv, UseDef useDef) {
-  set[Message] msgs = {};
+Type typeOf(ref(id(_, src = loc u)), TEnv tenv, UseDef useDef) = t
+  when <u, loc d> <- useDef, <d, _, _, Type t> <- tenv;
   
-  switch (e) {
-    case ref(AId x):
-      msgs += { error("Undeclared question", x.src) | useDef[x.src] == {} };
+Type typeOf(boolean(bool _), TEnv _, UseDef _) = tbool();
+Type typeOf(integer(int _), TEnv _, UseDef _) = tint();
+Type typeOf(string(str _), TEnv _, UseDef _) = tstr();
 
-  case not(AExpr child, src = loc u):
-      msgs += { error("Mismatched type used, not operator (!) expects a boolean.", u) | typeOf(child, tenv, useDef) != tbool() };
-    case mul(AExpr lhs, AExpr rhs, src = loc u):
-      msgs += { error("Wrong types used, multiplication operator (*) expects integers.", u) | operatorHasInts(lhs, rhs, tenv, useDef) };
-    case div(AExpr lhs, AExpr rhs, src = loc u):
-      msgs += { error("Wrong types used, division operator (\\) expects integers.", u) | operatorHasInts(lhs, rhs, tenv, useDef) };
-    case add(AExpr lhs, AExpr rhs, src = loc u):
-      msgs += { error("Wrong types used, addition operator (+) expects integers.", u) | operatorHasInts(lhs, rhs, tenv, useDef) };
-    case sub(AExpr lhs, AExpr rhs, src = loc u):
-      msgs += { error("Wrong types used, subtraction operator (-) expects integers.", u) | operatorHasInts(lhs, rhs, tenv, useDef) };
-    case gt(AExpr lhs, AExpr rhs, src = loc u):
-      msgs += { error("Wrong types used, greater than operator (\>) expects integers.", u) | operatorHasInts(lhs, rhs, tenv, useDef) };    
-    case lt(AExpr lhs, AExpr rhs, src = loc u):
-      msgs += { error("Wrong types used, less than operator (\<) expects integers.", u) | operatorHasInts(lhs, rhs, tenv, useDef) };    
-    case leq(AExpr lhs, AExpr rhs, src = loc u):
-      msgs += { error("Wrong types used, less or equal operator (\<=) expects integers.", u) | operatorHasInts(lhs, rhs, tenv, useDef) };    
-    case geq(AExpr lhs, AExpr rhs, src = loc u):
-      msgs += { error("Wrong types used, greater or equal operator (\>=) expects integers.", u) | operatorHasInts(lhs, rhs, tenv, useDef) };    
-    case eq(AExpr lhs, AExpr rhs, src = loc u):
-      msgs += { error("Mismatched types used, equals operator (==) expects operands of the same type.", u) | operatorHasSameType(lhs, rhs, tenv, useDef) };
-    case neq(AExpr lhs, AExpr rhs, src = loc u):
-      msgs += { error("Mismatched types used, not equals operator (!=) expects operands of the same type.", u) | operatorHasSameType(lhs, rhs, tenv, useDef) };
-    case and(AExpr lhs, AExpr rhs, src = loc u):
-      msgs += { error("Wrong types used, and operator (&&) expects booleans.", u) | operatorHasBooleans(lhs, rhs, tenv, useDef) };
-    case or(AExpr lhs, AExpr rhs, src = loc u):
-      msgs += { error("Wrong types used, or operator (||) expects booleans.", u) | operatorHasBooleans(lhs, rhs, tenv, useDef) };    
-  }
-  return msgs; 
-}
-bool operatorHasInts(lhs, rhs, tenv, useDef) { 
-  return !(typeOf(lhs, tenv, useDef) == typeOf(rhs, tenv, useDef) && typeOf(rhs, tenv, useDef) == tint());
-} 
-bool operatorHasBooleans(lhs, rhs, tenv, useDef) { 
-  return !(typeOf(lhs, tenv, useDef) == typeOf(rhs, tenv, useDef) && typeOf(rhs, tenv, useDef) == tbool());
-}
-bool operatorHasSameType(lhs, rhs, tenv, useDef) {
-  return typeOf(lhs, tenv, useDef) != typeOf(rhs, tenv, useDef);
-}
-
-
-
-
-
-
-
-Type typeOf(AExpr e, TEnv tenv, UseDef useDef) {
-  switch (e) {
-    case ref(id(_, src = loc u)):  
-      if (<u, loc d> <- useDef, <d, x, _, Type t> <- tenv) {
-        return t;
-      }
-  case integer(_): return tint();
-  case boolean(_): return tbool();
-  case string(_): return tstr();
-
-  case not(_): return tbool();
-               
-  case mul(_,_): return tint();
-  case div(_,_): return tint();
-               
-  case add(_,_): return tint();
-  case sub(_,_): return tint();
-
-  case greater(_,_): return tbool();
-  case less(_,_): return tbool();
-  case leq(_,_): return tbool();
-  case geq(_,_): return tbool();
-
-  case eq(_,_): return tbool();
-  case neq(_,_): return tbool();
-           
-  case and(_,_): return tbool();
-
-  case or(_,_): return tbool();
-  }
-  return tunknown(); 
-}
-
-/* 
- * Pattern-based dispatch style:
- * 
- * Type typeOf(ref(id(_, src = loc u)), TEnv tenv, UseDef useDef) = t
- *   when <u, loc d> <- useDef, <d, x, _, Type t> <- tenv
- *
- * ... etc.
- * 
- * default Type typeOf(AExpr _, TEnv _, UseDef _) = tunknown();
- *
- */
- 
+Type typeOf(not(AExpr expr), TEnv tenv, UseDef useDef) = tbool()
+  when typeOf(expr, tenv, useDef) == tbool();
+  
+Type typeOf(mul(AExpr lhs, AExpr rhs), TEnv tenv, UseDef useDef) = tint()
+  when typeOf(lhs, tenv, useDef) == tint() && typeOf(rhs, tenv, useDef) == tint();
+Type typeOf(div(AExpr lhs, AExpr rhs), TEnv tenv, UseDef useDef) = tint()
+  when typeOf(lhs, tenv, useDef) == tint() && typeOf(rhs, tenv, useDef) == tint();
+Type typeOf(add(AExpr lhs, AExpr rhs), TEnv tenv, UseDef useDef) = tint()
+  when typeOf(lhs, tenv, useDef) == tint() && typeOf(rhs, tenv, useDef) == tint();
+Type typeOf(sub(AExpr lhs, AExpr rhs), TEnv tenv, UseDef useDef) = tint()
+  when typeOf(lhs, tenv, useDef) == tint() && typeOf(rhs, tenv, useDef) == tint();
+  
+Type typeOf(less(AExpr lhs, AExpr rhs), TEnv tenv, UseDef useDef) = tbool()
+  when typeOf(lhs, tenv, useDef) == tint() && typeOf(rhs, tenv, useDef) == tint();
+Type typeOf(leq(AExpr lhs, AExpr rhs), TEnv tenv, UseDef useDef) = tbool()
+  when typeOf(lhs, tenv, useDef) == tint() && typeOf(rhs, tenv, useDef) == tint();
+Type typeOf(greater(AExpr lhs, AExpr rhs), TEnv tenv, UseDef useDef) = tbool()
+  when typeOf(lhs, tenv, useDef) == tint() && typeOf(rhs, tenv, useDef) == tint();
+Type typeOf(geq(AExpr lhs, AExpr rhs), TEnv tenv, UseDef useDef) = tbool()
+  when typeOf(lhs, tenv, useDef) == tint() && typeOf(rhs, tenv, useDef) == tint();
+Type typeOf(eq(AExpr lhs, AExpr rhs), TEnv tenv, UseDef useDef) = typeOf(lhs, tenv, useDef)
+  when typeOf(lhs, tenv, useDef) == typeOf(rhs, tenv, useDef);
+Type typeOf(neq(AExpr lhs, AExpr rhs), TEnv tenv, UseDef useDef) = typeOf(lhs, tenv, useDef)
+  when typeOf(lhs, tenv, useDef) == typeOf(rhs, tenv, useDef);
+Type typeOf(and(AExpr lhs, AExpr rhs), TEnv tenv, UseDef useDef) = tbool()
+  when typeOf(lhs, tenv, useDef) == tbool() && typeOf(rhs, tenv, useDef) == tbool();
+Type typeOf(or(AExpr lhs, AExpr rhs), TEnv tenv, UseDef useDef) = tbool()
+  when typeOf(lhs, tenv, useDef) == tbool() && typeOf(rhs, tenv, useDef) == tbool();
+  
+default Type typeOf(AExpr _, TEnv _, UseDef _) = tunknown();
  
 
