@@ -17,7 +17,7 @@ data AQuestion(loc src = |tmp:///|)
   | block(list[AQuestion] questions)
   | if_then(AExpr condition, AQuestion ifTrue)
   | if_then_else(AExpr condition, AQuestion ifTrue, AQuestion ifFalse)
-  ; 
+  ;
 
 data AExpr(loc src = |tmp:///|)
   = ref(AId id)

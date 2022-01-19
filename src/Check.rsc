@@ -16,63 +16,89 @@ alias TEnv = rel[loc def, str name, str label, Type \type];
 
 // To avoid recursively traversing the form, use the `visit` construct
 // or deep match (e.g., `for (/question(...) := f) {...}` ) 
+//deep match
 
-TEnv collect(AForm f)
-  = { <q.id.src, q.id.name, q.label, toType(q.\questionType)> | /AQuestion q := f, q has id };
-  
-  
-  
-set[Message] check(AForm f, TEnv tenv, UseDef useDef) {
-	set[Message] msgs = {};
-
-	for (/AQuestion q := f)
-		msgs += check(q, tenv, useDef);
-	for (/AExpr e := f)
-		msgs += check(e, tenv, useDef);
-
-	return msgs;
-}
-
-
-
-// - produce an error if there are declared questions with the same name but different types.
-// - duplicate labels should trigger a warning 
-set[Message] check(AQuestion q, TEnv tenv, UseDef useDef) {
-	set[Message] msg = {};
-	
-	str n = q.id.name;
-	if((<_, n, _, Type t> <- tenv) && t != toType(q.questionType)){
-		msg += {error("Previously declared question with same name, but different type", q.src)};
-		
+TEnv collect(AForm f) {
+	TEnv tenv = {};	
+	for(/AQuestion q <- f.questions) {
+		tenv += {<q.src, q.id, q.label, toType(q.questionType)> | q has name};
 	}
-	
-	if((<_, _, str label, _> <- tenv) && label == q.label){
-		msg += {warning("The label of this question is identical to that of another question", q.src)};
-		
-	}
-  return msg; 
+	return tenv;
 }
-
-// - the declared type computed questions should match the type of the expression.
-set[Message] check(AQuestion q, AExpr expr, TEnv tenv, UseDef useDef) {
-	set[Message] msg = {};
-		
-	t = typeOf(expr, tenv, useDef);
-	
-	if(t != toType(q.questionType)){
-		msg += {error("the declared type computed questions should match the type of the expression.", q.src)};
-	}
-	return msg; 
-}
-
-
-
-
-
+  
 Type toType(\boolean()) = tbool();
 Type toType(\integer()) = tint();
 Type toType(\string()) = tstr();
 default Type toType(AType _) = tunknown();
+
+  
+set[Message] check(AForm f, TEnv tenv, UseDef useDef) {
+	set[Message] msgs = {};
+  
+  	if ( (<loc1, x, _, tint()> <- tenv && <loc2, x, _, tbool()> <- tenv )
+        || (<loc1, x, _, tint()> <- tenv && <loc2, x, _, tstr()> <- tenv )
+        || (<loc1, x, _, tbool()> <- tenv && <loc2, x, _, tstr()> <- tenv )) {
+        msgs += error("Duplicate question with different types", loc1);
+        msgs += error("Duplicate question with different types", loc2);
+  	}
+  
+ 	for (AQuestion q <- f.questions) {
+   	 msgs += check(q, tenv, useDef);
+ 	}
+  	
+ 	 return msgs;
+}
+
+// - produce an error if there are declared questions with the same name but different types.
+// - duplicate labels should trigger a warning 
+// - the declared type computed questions should match the type of the expression.
+set[Message] check(AQuestion q, TEnv tenv, UseDef useDef) {
+  set[Message] msgs = {};
+  
+  switch (q) {
+    case normal(str label, AId id, AType questionType, src = loc u):{
+      if( <src1, _, label, _> <- tenv && <src2, _, label, _> <- tenv && src1 != src2)
+      	msgs += { warning("Same label for different questions", u) };
+      	
+      if( <_, id, label1, _> <- tenv && <_, id, label2, _> <- tenv && label1 != label2)
+      	msgs += { warning("Different label for occurrencies of the same question", u) }; 	
+     }
+    
+    case computed(str label, AId id, AType questionType, AExpr expr, src = loc u): {
+      if( <src1, _, label, _> <- tenv && <src2, _, label, _> <- tenv && src1 != src2)
+      	msgs += { warning("Same label for different questions", u) };
+      	
+      if( <_, id, label1, _> <- tenv && <_, id, label2, _> <- tenv && label1 != label2)
+      	msgs += { warning("Different label for occurrencies of the same question", u) };
+      
+      msgs += check(expr, tenv, useDef);
+      msgs += { error("Declared type does not match expression type", u) | 
+                typeOf(expr, tenv, useDef) != toType(questionType) };
+    }
+    
+    case block(list[AQuestion] questions, src = loc u):
+      for (AQuestion q <- questions) msgs += check(q, tenv, useDef);
+    
+    case if_then_else(AExpr cond, AQuestion ifqs, AQuestion elseqs, src = loc u): {
+      msgs += { error("Condition is not boolean", u) | typeOf(cond, tenv, useDef) != tbool() };
+      msgs += check(cond, tenv, useDef);
+      for (AQuestion q <- ifqs)   msgs += check(q, tenv, useDef);
+      for (AQuestion q <- elseqs) msgs += check(q, tenv, useDef);
+    }
+    
+    case if_then(AExpr cond, AQuestion ifqs, src = loc u): {
+      msgs += { error("Condition is not boolean", u) | typeOf(cond, tenv, useDef) != tbool() };
+      msgs += check(cond, tenv, useDef);
+      for (AQuestion q <- ifqs) msgs += check(q, tenv, useDef);
+    }
+  }
+  
+  return msgs;
+}
+
+
+
+
 
 
 
