@@ -21,8 +21,8 @@ data AQuestion(loc src = |tmp:///|)
 
 data AExpr(loc src = |tmp:///|)
   = ref(AId id)
-  | integer(int i)
   | boolean(bool b)
+  | integer(int i)
   | string(str s)
     
   | not(AExpr expr)
@@ -50,7 +50,7 @@ data AId(loc src = |tmp:///|)
   = id(str name);
 
 data AType(loc src = |tmp:///|)
-  = integer()
-  | boolean()
+  = boolean()
+  | integer()
   | string()
   ;

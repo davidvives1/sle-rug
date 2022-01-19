@@ -37,9 +37,9 @@ syntax Expr
   ;
   
 syntax Type
-  = "string"
+  = "boolean"
   | "integer"
-  | "boolean"
+  | "string"
   ;  
   
 lexical Str = "\"" ![\"]* "\""; //character class that defines anything except quotes.
