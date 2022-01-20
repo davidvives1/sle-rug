@@ -28,7 +28,7 @@ RefGraph resolve(AForm f) = <us, ds, us o ds>
  UseDef resolve(AForm f) = uses(f) o defs(f);
 
 Use uses(AForm f) { 
-  return { <e.src, e.id.name>  | /AExpr e <- f.questions, e has name}; //Will only get expressions that have a name.
+  return { <e.src, e.id.name>  | /AExpr e <- f.questions, e has id}; //Will only get expressions that have a name.
 }
 
 Def defs(AForm f) {
