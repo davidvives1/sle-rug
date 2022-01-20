@@ -24,11 +24,9 @@ alias RefGraph = tuple[
 
 RefGraph resolve(AForm f) = <us, ds, us o ds>
   when Use us := uses(f), Def ds := defs(f);
-  
- UseDef resolve(AForm f) = uses(f) o defs(f);
 
 Use uses(AForm f) { 
-  return { <e.src, e.id.name>  | /AExpr e <- f.questions, e has id}; //Will only get expressions that have a name.
+  return { <r.src, id.name>  | /r:ref(AId id) := f }; //Will only get expressions that have a name.
 }
 
 Def defs(AForm f) {
