@@ -21,7 +21,7 @@ alias TEnv = rel[loc def, str name, str label, Type \type];
 TEnv collect(AForm f) {
 	TEnv tenv = {};	
 	for(/AQuestion q <- f.questions) {
-		tenv += {<q.src, q.id, q.label, toType(q.questionType)> | q has name};
+		tenv += {<q.src, q.id.name, q.label, toType(q.questionType)> | q has id};
 	}
 	return tenv;
 }
@@ -78,7 +78,7 @@ set[Message] check(AQuestion q, TEnv tenv, UseDef useDef) {
                 typeOf(expr, tenv, useDef) != toType(questionType) };
     }
     
-    case block(list[AQuestion] questions, src = loc u):
+    case block(list[AQuestion] questions):
       for (AQuestion q <- questions) msgs += check(q, tenv, useDef);
     
     case if_then_else(AExpr cond, list[AQuestion] ifQs, list[AQuestion] elseQs, src = loc u): {
