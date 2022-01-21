@@ -23,167 +23,143 @@ void compile(AForm f) {
   writeFile(f.src[extension="html"].top, toString(form2html(f)));
 }
 
-HTML5Node form2html(AForm f) {
-  return html(
-    head(
-      title("QL")
-    ),
-    body(
-      div(
-        id("app"), 
-        h1(f.name),
-        questionList2html(f.questions)
-      ),
-      script(src("https://cdn.jsdelivr.net/npm/vue")),
-      script(src(f.src[extension="js"].file))
-    )
-  );
+/* Convert a list of questions to HTML by converting the questions
+ * to HTML and putting them in a div.
+ */
+HTML5Node questionlist2html(list[AQuestion] qs) {
+  HTML5Node block = div();
+  for (AQuestion q <- qs) {
+    block.kids += [ question2html(q) ];
+  }
+  return block;
 }
 
-HTML5Node questionList2html(list[AQuestion] questionList) {
-  return div(
-    [question2html(question) | question <- questionList]
-  );
-}
+// Return a unique identifier for if statements
+str if2identifier(loc src)
+  = "conditions$if_<src.begin.line>_<src.begin.column>";
 
-HTML5Node question2html(AQuestion question) {
-  switch (question) {
-    case normal(str label, AId id, AType questionType): 
-      return div(
-        p(label),
-        input(html5attr("v-model", id), \type(type2htmlStr(questionType)))
-      );
-    case computed(str label, AId id, AType questionType, AExpr expr): 
-      return div(
-        p(label),
-        input(html5attr("v-model", id), \type(type2htmlStr(questionType)), readonly([]))
-      );
-    case block(list[AQuestion] block): 
-      return questionList2html(block);
-    case if_then(AExpr expression, list[AQuestion] ifQs):
-      return template(
-        html5attr("v-if", "if_<expression.src.begin.line>_<expression.src.begin.column>"),
-        questionList2html(ifQs)
-      );
-    case if_then_else(AExpr expression, list[AQuestion] ifQs, list[AQuestion] elseQs):
-      return div(
-        template(
-          html5attr("v-if", "if_<expression.src.begin.line>_<expression.src.begin.column>"),
-          questionList2html(ifQs)
+/******************* form2html *******************/
+HTML5Node form2html(AForm f)
+  = html(
+      head(title("f.name")),
+      body(
+        div(
+          id("app"),
+          questionlist2html(f.questions)
         ),
-        template(
-          html5attr("v-else", ""),
-          questionList2html(elseQs)
-        )
-      );
-    default: return div();
-  }
+        script(src("https://cdn.jsdelivr.net/npm/vue@2.5.21/dist/vue.min.js")),
+        script(src(f.src[extension="js"].file))
+      )
+    );
+// Generate inputs for string, boolean and integer questions
+HTML5Node questionInput(AId questionId, string())
+  = input(html5attr("v-model", questionId.name), \type("text"));
+HTML5Node questionInput(AId questionId, boolean())
+  = input(html5attr("v-model", questionId.name), \type("checkbox"));
+HTML5Node questionInput(AId questionId, integer())
+  = input(html5attr("v-model.number", questionId.name), \type("number"));
+// Generate HTML for different question types
+HTML5Node question2html(normal(str label, AId questionId, AType t))
+  = div(p(label), questionInput(questionId, t));
+HTML5Node question2html(computed(str label, AId questionId, AType t, AExpr _)) {
+  HTML5Node input = questionInput(questionId, t);
+  input.kids += [ readonly("true") ];
+  
+  return div(p(label), input);
+}
+HTML5Node question2html(block(list[AQuestion] qs))
+  = questionlist2html(qs);
+HTML5Node question2html(if_then(AExpr _, list[AQuestion] qs, src=loc u)) {
+  HTML5Node questionsDiv = questionlist2html(qs);
+  questionsDiv.kids += [ html5attr("v-if", if2identifier(u)) ];
+  
+  return questionsDiv;
+}
+HTML5Node question2html(if_then_else(AExpr _, list[AQuestion] ifQuestions, list[AQuestion] elseQuestions, src=loc u)) {
+  HTML5Node ifQuestionsDiv = questionlist2html(ifQuestions);
+  HTML5Node elseQuestionsDiv = questionlist2html(elseQuestions);
+  ifQuestionsDiv.kids += [ html5attr("v-if", if2identifier(u)) ];
+  elseQuestionsDiv.kids += [ html5attr("v-else", "") ];
+  
+  return div(ifQuestionsDiv, elseQuestionsDiv);
 }
 
-str type2htmlStr(AType questionType) {
-  switch (questionType) {
-    case boolean(): return "checkbox";
-    case integer(): return "number";
-    case string(): return "text";
-  }
-}
+/******************* form2js *******************/
+// Translate abstract expressions to JavaScript
+str aExpr2js(ref(AId id))
+  = "this.<id.name>";
+str aExpr2js(string(str s))
+  = "\"<s>\"";
+ 
+str aExpr2js(integer(int i))
+  = "<i>";
+str aExpr2js(boolean(bool b))
+  = "<b>";
+str aExpr2js(not(AExpr expr))
+  = "!<aExpr2js(expr)>";
+str aExpr2js(mul(AExpr expr_lhs, AExpr expr_rhs))
+  = "(<aExpr2js(expr_lhs)> * <aExpr2js(expr_rhs)>)";
+str aExpr2js(div(AExpr expr_lhs, AExpr expr_rhs))
+  = "(<aExpr2js(expr_lhs)> / <aExpr2js(expr_rhs)>)";
+ 
+str aExpr2js(add(AExpr expr_lhs, AExpr expr_rhs))
+  = "(<aExpr2js(expr_lhs)> + <aExpr2js(expr_rhs)>)";
+str aExpr2js(sub(AExpr expr_lhs, AExpr expr_rhs))
+  = "(<aExpr2js(expr_lhs)> - <aExpr2js(expr_rhs)>)";
+str aExpr2js(less(AExpr expr_lhs, AExpr expr_rhs))
+  = "(<aExpr2js(expr_lhs)> \< <aExpr2js(expr_rhs)>)";
+str aExpr2js(greater(AExpr expr_lhs, AExpr expr_rhs))
+  = "(<aExpr2js(expr_lhs)> \> <aExpr2js(expr_rhs)>)";
+str aExpr2js(leq(AExpr expr_lhs, AExpr expr_rhs))
+  = "(<aExpr2js(expr_lhs)> \<= <aExpr2js(expr_rhs)>)";
+str aExpr2js(geq(AExpr expr_lhs, AExpr expr_rhs))
+  = "(<aExpr2js(expr_lhs)> \>= <aExpr2js(expr_rhs)>)";
+str aExpr2js(eq(AExpr expr_lhs, AExpr expr_rhs))
+  = "(<aExpr2js(expr_lhs)> == <aExpr2js(expr_rhs)>)";
+str aExpr2js(neq(AExpr expr_lhs, AExpr expr_rhs))
+  = "(<aExpr2js(expr_lhs)> !== <aExpr2js(expr_rhs)>)";
+str aExpr2js(and(AExpr expr_lhs, AExpr expr_rhs))
+  = "(<aExpr2js(expr_lhs)> && <aExpr2js(expr_rhs)>)";
+str aExpr2js(or(AExpr expr_lhs, AExpr expr_rhs))
+  = "(<aExpr2js(expr_lhs)> || <aExpr2js(expr_rhs)>)";
 
-// Javascript string templates
+// Default values in JavaScript for question types
+str defaultValue(string()) = "\"\"";
+str defaultValue(boolean()) = "false";
+str defaultValue(integer()) = "0";
 
-str form2js(AForm f) {
-  return "var app = new Vue({
-  	     '  el: \'#app\',
-  	     '  data: {
-  	     '    <for (/AQuestion questionList := f.questions) {>
-  	     '      <form2js(questionList)>
-  	     '    <}>
-  	     '  }
-  	     '});";
-}
-
-str form2js(AQuestion question) {
-  switch (question) {
-    case normal(str label, AId id, AType questionType): 
-      return "<id.name>: <defaultValue(questionType)>,";
-  	  
-    case computed(str label, AId id, AType questionType, AExpr expr): 
-      return "<id.name>: function() {
-  	     '          return <expr2js(expr)>;
-  	     '        },";
-  	     
-    case block(list[AQuestion] questionList): 
-      return "block: {
-  	     '    <for (/AQuestion question := questionList) {>
-  	     '      <form2js(question)>
-  	     '    <}>
-  	     '  },";
-  	     
-    case if_then(AExpr expr, list[AQuestion] ifQs):
-      return "if (<expr2js(expr)>) : {
-  	     '    <for (/AQuestion question := ifQs) {>
-  	     '      <form2js(question)>
-  	     '    <}>
-  	     '  },";
-  	     
-    case if_then_else(AExpr expression, list[AQuestion] ifQs, list[AQuestion] elseQs):
-      return "if (<expr2js(expr)>) : {
-  	     '    <for (/AQuestion question := ifQs) {>
-  	     '      <form2js(question)>
-  	     '    <}>
-  	     '  } else : {
-  	     '    <for (/AQuestion question := elseQs) {>
-  	     '      <form2js(question)>
-  	     '    <}>
-  	     '  },";
-  	     
-    default: return "";
-  }
-}
-
-str defaultValue(AType typeName) {
-  switch (typeName) {
-    case boolean(): return "false";
-    case integer(): return "0";
-    case string(): return "\"\"";
-  }
-}
-
-str expr2js(AExpr expression) {
-  switch (expression) {
-    case ref(AId id):
-      return "this.<id.name>";
-    case boolean(bool b):
-      return "<b>";
-    case integer(int i):
-      return "<i>";
-    case string(str s):
-      return "<s>";
-    case not(AExpr expr):
-      return "!<expr2js(expr)>";
-    case mul(AExpr a, AExpr b):
-      return "(<expr2js(a)> * <expr2js(b)>)";
-    case div(AExpr a, AExpr b):
-      return "(<expr2js(a)> / <expr2js(b)>)";
-    case add(AExpr a, AExpr b):
-      return "(<expr2js(a)> + <expr2js(b)>)";
-    case sub(AExpr a, AExpr b):
-      return "(<expr2js(a)> - <expr2js(b)>)";
-    case greater(AExpr a, AExpr b):
-      return "(<expr2js(a)> \> <expr2js(b)>)";
-    case less(AExpr a, AExpr b):
-      return "(<expr2js(a)> \< <expr2js(b)>)";
-    case leq(AExpr a, AExpr b):
-      return "(<expr2js(a)> \<= <expr2js(b)>)";
-    case geq(AExpr a, AExpr b):
-      return "(<expr2js(a)> \>= <expr2js(b)>)";
-    case eq(AExpr a, AExpr b):
-      return "(<expr2js(a)> = <expr2js(b)>)";
-    case neq(AExpr a, AExpr b):
-      return "(<expr2js(a)> != <expr2js(b)>)";
-    case and(AExpr a, AExpr b):
-      return "(<expr2js(a)> && <expr2js(b)>)";
-    case or(AExpr a, AExpr b):
-      return "(<expr2js(a)> || <expr2js(b)>)";
-    default: return "";
-  }
-}
+/*
+ * Generate JavaScript for a form by filling in a template.
+ * We chose to use Vue.js, which supports plain data bindings
+ * (in the data object of the Vue constructor) as well as
+ * computed values (in the computed object of the constructor).
+ * Normal questions will be translated to plain data values,
+ * whereas the expressions of computed questions and if statements
+ * will be computed.
+ */
+str form2js(AForm f)
+  = "var app = new Vue({
+    '  el: \"#app\",
+    '  data: {
+    '    <for (/normal(str label, AId questionId, AType t) := f.questions) {>
+    '    <questionId.name>: <defaultValue(t)>,
+    '    <}>
+    '  },
+    '  computed: {
+    '    <for (/computed(str _, AId questionId, AType _, AExpr expr) := f.questions) {>
+    '    <questionId.name>: function() {
+    '      return <aExpr2js(expr)>;
+    '    },
+    '    <}>
+    '    <for (/if_then(AExpr expr, list[AQuestion] _, src=loc u) := f.questions) {>
+    '    <if2identifier(u)>: function() {
+    '      return <aExpr2js(expr)>;
+    '    },
+    '    <}>
+    '    <for (/if_then_else(AExpr expr, list[AQuestion] _, list[AQuestion] _, src=loc u) := f.questions) {>
+    '    <if2identifier(u)>: function() {
+    '      return <aExpr2js(expr)>;
+    '    },
+    '    <}>
+    '  },
+    '});";
