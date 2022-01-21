@@ -81,7 +81,7 @@ HTML5Node question2html(AQuestion question) {
 }
 
 str type2htmlStr(AType questionType) {
-  switch (typeName) {
+  switch (questionType) {
     case boolean(): return "checkbox";
     case integer(): return "number";
     case string(): return "text";
@@ -95,7 +95,7 @@ str form2js(AForm f) {
   	     '  el: \'#app\',
   	     '  data: {
   	     '    <for (/AQuestion questionList := f.questions) {>
-  	     '      <form2js(question)>
+  	     '      <form2js(questionList)>
   	     '    <}>
   	     '  }
   	     '});";
@@ -119,14 +119,14 @@ str form2js(AQuestion question) {
   	     '  },";
   	     
     case if_then(AExpr expr, list[AQuestion] ifQs):
-      return "if return <expr2js(expr)> : {
+      return "if (<expr2js(expr)>) : {
   	     '    <for (/AQuestion question := ifQs) {>
   	     '      <form2js(question)>
   	     '    <}>
   	     '  },";
   	     
     case if_then_else(AExpr expression, list[AQuestion] ifQs, list[AQuestion] elseQs):
-      return "if return <expr2js(expr)> : {
+      return "if (<expr2js(expr)>) : {
   	     '    <for (/AQuestion question := ifQs) {>
   	     '      <form2js(question)>
   	     '    <}>
