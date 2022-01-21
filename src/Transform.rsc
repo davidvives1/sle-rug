@@ -3,6 +3,7 @@ module Transform
 import Syntax;
 import Resolve;
 import AST;
+import IO;
 
 /* 
  * Transforming QL forms
@@ -29,7 +30,28 @@ import AST;
  */
  
 AForm flatten(AForm f) {
-  return f; 
+   f.questions=flatten(f.questions,boolean(true));
+   return f;
+}
+
+list[AQuestion] flatten(list[AQuestion] aQuestions, AExpr expr){
+	return ([] | it + flatten(aQuestion, expr) | /AQuestion aQuestion := aQuestions);
+}
+
+list[AQuestion] flatten(AQuestion q, AExpr expr) {
+	switch (q) {
+		case normal(str _, AId _, AType _):
+			return  [if_then(expr, [q])];
+		case computed(str _, AId _, AType _, AExpr _):
+			return  [if_then(expr, [q])];
+		case block(list[AQuestion] questions):
+			return flatten(questions, expr);
+		case if_then(AExpr e, list[AQuestion] if_qs):
+			return flatten(if_qs, and(e, expr));
+		case if_then_else(AExpr condition, list[AQuestion] trueQuestions, list[AQuestion] falseQuestions):
+			return   flatten(trueQuestions, and(condition, expr)) + flatten(falseQuestions, and(not(condition), expr));
+	}
+	return [];
 }
 
 /* Rename refactoring:
@@ -39,10 +61,8 @@ AForm flatten(AForm f) {
  *
  */
  
- start[Form] rename(start[Form] f, loc useOrDef, str newName, UseDef useDef) {
+start[Form] rename(start[Form] f, loc useOrDef, str newName, UseDef useDef) {
    return f; 
- } 
- 
- 
+ }
  
 
