@@ -30,14 +30,14 @@ VEnv initialEnv(AForm f) {
   VEnv venv = ();
   
   visit(f) {
-    case normal(str label, AId id, AType questionType, src = loc def):
+    case normal(_, AId id, AType questionType, src = loc _):
       switch (questionType) {
         case integer(): venv += (id : vint(0)); 
         case boolean(): venv += (id : vbool(false));    
         case string(): venv += (id : vstr(""));
       }
   
-    case computed(str label, AId id, AType questionType, AExpr expr, src = loc def):
+    case computed(_, AId id, AType questionType, _, src = loc _):
       switch (questionType) {
         case integer(): venv += (id : vint(0)); 
         case boolean(): venv += (id : vbool(false));
