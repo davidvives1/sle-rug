@@ -51,30 +51,38 @@ HTML5Node form2html(AForm f)
         script(src(f.src[extension="js"].file))
       )
     );
+    
 // Generate inputs for string, boolean and integer questions
 HTML5Node questionInput(AId questionId, string())
   = input(html5attr("v-model", questionId.name), \type("text"));
+  
 HTML5Node questionInput(AId questionId, boolean())
   = input(html5attr("v-model", questionId.name), \type("checkbox"));
+  
 HTML5Node questionInput(AId questionId, integer())
   = input(html5attr("v-model.number", questionId.name), \type("number"));
+  
 // Generate HTML for different question types
 HTML5Node question2html(normal(str label, AId questionId, AType t))
   = div(p(label), questionInput(questionId, t));
+  
 HTML5Node question2html(computed(str label, AId questionId, AType t, AExpr _)) {
   HTML5Node input = questionInput(questionId, t);
   input.kids += [ readonly("true") ];
   
   return div(p(label), input);
 }
+
 HTML5Node question2html(block(list[AQuestion] qs))
   = questionlist2html(qs);
+  
 HTML5Node question2html(if_then(AExpr _, list[AQuestion] qs, src=loc u)) {
   HTML5Node questionsDiv = questionlist2html(qs);
   questionsDiv.kids += [ html5attr("v-if", if2identifier(u)) ];
   
   return questionsDiv;
 }
+
 HTML5Node question2html(if_then_else(AExpr _, list[AQuestion] ifQuestions, list[AQuestion] elseQuestions, src=loc u)) {
   HTML5Node ifQuestionsDiv = questionlist2html(ifQuestions);
   HTML5Node elseQuestionsDiv = questionlist2html(elseQuestions);
@@ -90,7 +98,6 @@ str aExpr2js(ref(AId id))
   = "this.<id.name>";
 str aExpr2js(string(str s))
   = "\"<s>\"";
- 
 str aExpr2js(integer(int i))
   = "<i>";
 str aExpr2js(boolean(bool b))
